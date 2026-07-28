@@ -3,6 +3,9 @@
 ## Status
 Proposed
 
+## Labels
+type:docs
+
 ## Context
 Before implementing a private-access registry in the Soroban smart contracts for the Stellar-AgentVerse platform, it is crucial to strictly define the security architecture and evaluate trade-offs. The current system handles prompt sales via contracts (`PromptMarketplace`, `MyToken`). We need to guarantee the privacy of the prompts accessed by authorized buyers, minimizing exposure on the blockchain. Since this analysis focuses on the **Smart Contracts** layer, we evaluate how to design the contracts to support secure private access without leaking sensitive information on the public Stellar network.
 
@@ -43,8 +46,11 @@ For the implementation of the access registry in Soroban, we define the followin
 ### Anti-replay Mechanisms
 If contracts must verify access claims, they must include nonce mechanisms per address or strict timestamps in delegated signatures to prevent a single authorization from being reused multiple times (replay attacks).
 
-### Key Lifecycle
-The on-chain logic must not store direct decryption keys. If commitments are used, the contract must manage the commitment lifecycle (creation upon purchase, invalidation or expiration upon claim).
+### Key Lifecycle (Verifiable Protocol)
+To ensure a verifiable boundary of trust, the key lifecycle is defined as follows:
+1.  **Authentication & Key Separation**: Buyers must authenticate using a dedicated encryption public key that is strictly separate from their Stellar signing key.
+2.  **Plaintext & Content Keys Visibility**: Only the buyer's client environment and the ephemeral KMS/AI decryption service can ever view the plaintext prompt or content keys. The backend infrastructure must guarantee it never stores plaintext long-term.
+3.  **Rotation & Revocation**: When a key is rotated, the off-chain system will re-encrypt the content for the new public key. Since the on-chain contract only tracks the entitlement (via hash), on-chain migration is not required for key rotation, but the off-chain delivery system must revoke the old key pair.
 
 ### Delivery Protocol (Contract Perspective)
 1.  The buyer submits a purchase transaction on-chain sending an opaque **hash (commitment)** instead of the plaintext prompt ID.
@@ -54,14 +60,15 @@ The on-chain logic must not store direct decryption keys. If commitments are use
 ### Migration Paths
 If ZK or another advanced technology is adopted in the future, the contract must use upgradable patterns or storage delegation to allow migration of old access records to the new format without loss of rights.
 
-### Required Test Evidence
-*   **Unit Tests (Rust)**: Ensure unauthorized contract accesses fail and commitment (hash) verification is correct.
-*   **Leakage Tests**: Validate in tests that neither events nor state storage include plaintext strings related to prompts.
-*   **Integration Tests**: Simulate opaque purchase flows on testnet and verify correct token deduction.
+### Acceptance Criteria & Required Test Evidence
+To consider this approach valid, the following must be proven:
+*   **Forbidden Fields & Logs**: It is strictly forbidden for `content_uri`, `title`, or plaintext `prompt_id` to appear in any Soroban storage, argument, or event log.
+*   **Replay Proofs (Unit Tests)**: Rust tests must cryptographically prove that attempting to replay a purchase or claim with a reused hash/signature is rejected by the contract.
+*   **Backend Evidence (Issue #8)**: The backend implementation must provide concrete evidence (test coverage) that it performs hashing before invoking the contract, and that it explicitly zeroes out the decryption Key (DEK) from memory immediately after execution.
 
 ## Decision
 *(To be finalized upon approval)*
-We recommend moving forward with an **Opaque Access Records (Hashes/Commitments)** approach at the smart contract level, combined with secure off-chain handling. This avoids massive ZK costs while sanitizing on-chain state and events of sensitive information.
+We recommend moving forward with an **Opaque Access Records (Hashes/Commitments)** approach at the smart contract level. **Explicit Limitation:** As long as `buy_prompt(buyer, prompt_hash)` and `has_access(user, prompt_hash)` keep their arguments, storage, and events public on the ledger, the encrypted off-chain delivery CANNOT preserve an on-chain entitlement verification that hides the `buyer↔prompt` link. On-chain unlinkability is strictly out of scope for this iteration and remains a future goal requiring advanced commitments or ZK proofs.
 
 ## Consequences
 *   We will modify `PromptMarketplace` to accept opaque identifiers (hashes) instead of plaintext prompt IDs.
