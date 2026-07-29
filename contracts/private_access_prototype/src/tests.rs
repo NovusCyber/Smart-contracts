@@ -3,18 +3,21 @@
 extern crate std;
 
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Events}, Address, BytesN, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Events},
+    Address, BytesN, Env,
+};
 
 #[test]
 fn test_feasibility_and_cost() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register_contract(None, PrivateAccessPrototype);
     let client = PrivateAccessPrototypeClient::new(&env, &contract_id);
 
     let buyer = Address::generate(&env);
-    
+
     // Simulating a deterministic hash with domain separation and salt
     let mut hash_data = [0u8; 32];
     hash_data[0] = 1; // dummy hash
@@ -25,12 +28,12 @@ fn test_feasibility_and_cost() {
     // Measure resource cost
     let pre_cpu = env.budget().cpu_instruction_cost();
     let pre_mem = env.budget().memory_bytes_cost();
-    
+
     client.buy_access(&buyer, &prompt_hash);
-    
+
     let post_cpu = env.budget().cpu_instruction_cost();
     let post_mem = env.budget().memory_bytes_cost();
-    
+
     let cost_cpu = post_cpu - pre_cpu;
     let cost_mem = post_mem - pre_mem;
 

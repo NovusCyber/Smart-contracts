@@ -1,6 +1,6 @@
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, vec, Address, BytesN, Env, IntoVal, String,
-    Symbol, Val, Vec,
+    contract, contracterror, contractevent, contractimpl, vec, Address, BytesN, Env, IntoVal,
+    String, Symbol, Val, Vec,
 };
 
 use crate::storage::types::{DataKey, PrivatePrompt, Prompt};
@@ -199,18 +199,16 @@ impl PromptMarketplace {
     // ─── Admin: private prompt management ────────────────────
 
     /// Register a new private prompt using an opaque hash.
-    pub fn register_private_prompt(
-        e: &Env,
-        prompt_hash: BytesN<32>,
-        price: i128,
-        owner: Address,
-    ) {
+    pub fn register_private_prompt(e: &Env, prompt_hash: BytesN<32>, price: i128, owner: Address) {
         Self::enforce_admin(e);
         assert!(price > 0, "price must be positive");
 
         let key = DataKey::PrivatePrompt(prompt_hash.clone());
         assert!(
-            e.storage().instance().get::<_, PrivatePrompt>(&key).is_none(),
+            e.storage()
+                .instance()
+                .get::<_, PrivatePrompt>(&key)
+                .is_none(),
             "prompt already registered"
         );
 
