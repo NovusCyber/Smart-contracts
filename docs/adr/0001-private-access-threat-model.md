@@ -66,14 +66,14 @@ We have implemented the **Opaque Access Records (Hashes/Commitments)** approach 
 ### Implemented Evidence & Cryptography Assumptions
 
 *   **Commitment Construction & Entropy**: Hashes (`BytesN<32>`) must be generated off-chain using a cryptographic hash function (e.g., SHA-256) applying domain separation and a high-entropy salt to prevent preimage/dictionary attacks. The required format is: `Hash = SHA256(Domain_Separator || Prompt_ID || High_Entropy_Salt)`. Example domain separator: `PMPT_V1`.
-*   **Resource-Cost Measurements**: Extremely low overhead. Storing a `BytesN<32>` key and a simple `PrivatePrompt` struct requires minimal ledger space. Feasibility tests measure the CPU cost at ~28,000 instructions and Memory cost at ~1,500 bytes per purchase, which translates to <100 stroops in fees.
+*   **Resource-Cost Measurements**: The feasibility test records host CPU and memory deltas for an opaque access write. Those numbers are not a Testnet fee quote: fees also depend on the network fee schedule, transaction footprint, and storage rent. A deployment decision must record a `simulateTransaction`/Testnet result for the exact deployed WASM.
 *   **Privacy Guarantees**: Prompt content, URIs, and human-readable IDs are never exposed on-chain or in event schemas. Validated by storage and event inspection tests rejecting plaintext.
 *   **Residual Metadata Leaks**: The transaction submitter (buyer), exact time of purchase, and the price (tokens burned) remain public. The opaque hash allows linkability if the same prompt is bought multiple times by different users.
 *   **Failure Modes & Atomic Transitions**: Replay attacks are prevented via atomic storage updates (`PrivatePurchase` key mapping). If token deduction fails (e.g., insufficient balance), the entire transaction rolls back atomically, preventing partial entitlement. Unauthorized registrations are blocked by `require_auth`.
-*   **Key-Lifecycle Assumptions**: The contract does not store or manage DEKs (Data Encryption Keys). The backend manages key rotation. The smart contract acts exclusively as an authorization ledger.
+*   **Key-Lifecycle Assumptions**: The contract does not store or manage DEKs (Data Encryption Keys). The backend manages key rotation. The smart contract acts exclusively as an authorization ledger. A private access record is perpetual by default; an authorized administrator may invalidate it with `revoke_private_access`. No automatic cleanup is needed while a grant is valid; the contract instance TTL and upgrades remain the operational storage lifecycle.
 *   **Delivery-Service Trust**: Buyers must trust the off-chain delivery service to respect the on-chain purchase event and securely deliver the decrypted prompt content. The contract cannot mathematically enforce the off-chain delivery (no ZK/escrow).
 
 ## Consequences
 *   We will modify `PromptMarketplace` to accept opaque identifiers (hashes) instead of plaintext prompt IDs.
-*   Emitted events will be restructured to maximize privacy.
-*   Changes will be required in how clients construct transactions (client-side hashing before calling the contract).
+*   Emitted events are versioned (`*_v1`) for indexers. They expose the unavoidable buyer, commitment, and price metadata, but never a plaintext prompt identifier or key.
+*   Changes will be required in how clients construct transactions: the trusted registration path must generate `SHA256("PMPT_V1" || prompt_id || fresh_32_byte_salt)` and retain the salt off-chain. The contract cannot validate this preimage because it intentionally never receives it; it only accepts the resulting opaque 32-byte commitment.

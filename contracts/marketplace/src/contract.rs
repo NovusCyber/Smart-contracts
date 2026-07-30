@@ -76,7 +76,7 @@ pub struct TokensReminted {
 }
 
 /// Emitted when an admin registers a new private prompt.
-#[contractevent(data_format = "map", topics = ["private_prompt_registered"])]
+#[contractevent(data_format = "map", topics = ["private_prompt_registered_v1"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrivatePromptRegistered {
     #[topic]
@@ -88,7 +88,7 @@ pub struct PrivatePromptRegistered {
 }
 
 /// Emitted when a user buys a private prompt (tokens burned).
-#[contractevent(data_format = "single-value", topics = ["private_prompt_purchased"])]
+#[contractevent(data_format = "single-value", topics = ["private_prompt_purchased_v1"])]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrivatePromptPurchased {
     #[topic]
@@ -96,6 +96,17 @@ pub struct PrivatePromptPurchased {
     #[topic]
     pub prompt_hash: BytesN<32>,
     pub price: i128,
+}
+
+/// Emitted when the administrator invalidates a private access grant.
+#[contractevent(data_format = "single-value", topics = ["private_access_revoked_v1"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PrivateAccessRevoked {
+    #[topic]
+    pub admin: Address,
+    #[topic]
+    pub buyer: Address,
+    pub prompt_hash: BytesN<32>,
 }
 
 /// A Soroban contract that lets admins register prompts for sale,
@@ -291,6 +302,29 @@ impl PromptMarketplace {
             buyer,
             prompt_hash,
             price: prompt.price,
+        }
+        .publish(e);
+    }
+
+    /// Invalidate a private grant. Grants otherwise persist until the
+    /// marketplace instance expires or is upgraded.
+    pub fn revoke_private_access(e: &Env, buyer: Address, prompt_hash: BytesN<32>) {
+        Self::enforce_admin(e);
+
+        let purchase_key = DataKey::PrivatePurchase(buyer.clone(), prompt_hash.clone());
+        assert!(
+            e.storage()
+                .instance()
+                .get::<_, bool>(&purchase_key)
+                .unwrap_or(false),
+            "private access not found"
+        );
+        e.storage().instance().remove(&purchase_key);
+
+        PrivateAccessRevoked {
+            admin: Self::get_admin(e),
+            buyer,
+            prompt_hash,
         }
         .publish(e);
     }

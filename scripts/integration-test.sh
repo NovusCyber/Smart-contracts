@@ -88,8 +88,10 @@ echo ""
 
 # ── 5. Admin registers a private prompt ───────────────────────────────────
 echo "─── Step 5: Register private prompt (Hash) at price 700 ───"
-# Simulate generating a 32-byte hex hash (64 chars) for the prompt
-PRIVATE_HASH="0101010101010101010101010101010101010101010101010101010101010101"
+# Commitment format: SHA256("PMPT_V1" || prompt_id || high-entropy salt).
+# The salt is generated freshly for every run; it is not a prompt identifier.
+PRIVATE_SALT="$(openssl rand -hex 32)"
+PRIVATE_HASH="$(printf 'PMPT_V1\\0private-integration-prompt\\0%s' "$PRIVATE_SALT" | shasum -a 256 | awk '{print $1}')"
 send_yes "$MKT" default register_private_prompt \
   --prompt_hash "$PRIVATE_HASH" \
   --price 700 \
